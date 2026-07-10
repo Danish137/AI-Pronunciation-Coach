@@ -45,14 +45,24 @@ async def persist_and_prepare_audio(upload: UploadFile) -> PreparedAudio:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio exceeds file size limit.")
                 file_obj.write(chunk)
 
-        duration_seconds = probe_duration(original_path)
-        if duration_seconds < settings.min_audio_seconds or duration_seconds > settings.max_audio_seconds:
+        # Normalize first — this always produces a WAV with a valid duration header,
+        # even for browser-recorded webm files that have no duration in their container.
+        normalize_audio(original_path, normalized_path)
+
+        # Probe the normalized WAV — guaranteed to have a real duration.
+        duration_seconds = probe_duration(normalized_path)
+
+        if duration_seconds < settings.min_audio_seconds:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Audio must be between {settings.min_audio_seconds} and {settings.max_audio_seconds} seconds.",
+                detail=f"Recording is too short ({duration_seconds:.0f}s). Speak for at least {settings.min_audio_seconds} seconds.",
+            )
+        if duration_seconds > settings.max_audio_seconds + 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Recording is too long ({duration_seconds:.0f}s). Maximum is {settings.max_audio_seconds} seconds.",
             )
 
-        normalize_audio(original_path, normalized_path)
         return PreparedAudio(original_path=original_path, normalized_path=normalized_path, duration_seconds=duration_seconds)
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -60,20 +70,24 @@ async def persist_and_prepare_audio(upload: UploadFile) -> PreparedAudio:
 
 
 def probe_duration(path: Path) -> float:
+    """
+    Probe audio duration via ffprobe.
+    Always called on the normalized WAV output, which has a valid duration header.
+    """
     ensure_binary_available(settings.ffprobe_binary)
     command = [
         settings.ffprobe_binary,
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "json",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
         str(path),
     ]
     result = subprocess.run(command, check=True, capture_output=True, text=True)
     payload = json.loads(result.stdout)
-    duration = float(payload["format"]["duration"])
+    raw = payload.get("format", {}).get("duration")
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio appears to be empty or unreadable.")
+    duration = float(raw)
     if duration <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio appears to be empty.")
     return duration

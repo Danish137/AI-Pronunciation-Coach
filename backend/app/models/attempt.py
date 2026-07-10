@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.database import Base
@@ -26,4 +26,6 @@ class Attempt(Base):
     word_feedback_json: Mapped[str] = mapped_column(Text)
     result_payload_json: Mapped[str] = mapped_column(Text, default="")
     raw_azure_json: Mapped[str] = mapped_column(Text, default="")
+    consent_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    consent_recorded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

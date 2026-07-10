@@ -1,12 +1,41 @@
 import { useState } from "react";
 
-import type { PracticeWord, PriorityIssue, PracticePlan } from "../types/assessment";
+import type { WordCoaching } from "../types/assessment";
 
 type TopIssuesSectionProps = {
-  issues: PriorityIssue[];
-  practicePlan: PracticePlan;
-  onSelectWord: (startMs: number) => void;
+  wordCoaching: WordCoaching[];
 };
+
+export function selectTopPriorityWords(wordCoaching: WordCoaching[]): WordCoaching[] {
+  const sortByScore = (items: WordCoaching[]) => [...items].sort((left, right) => left.score - right.score);
+  const severe = sortByScore(wordCoaching.filter((item) => item.severity === "severe"));
+  const moderate = sortByScore(wordCoaching.filter((item) => item.severity === "moderate"));
+  const minor = sortByScore(wordCoaching.filter((item) => item.severity === "minor"));
+  const selected: WordCoaching[] = [];
+
+  for (const item of severe) {
+    if (selected.length >= 3) {
+      break;
+    }
+    selected.push(item);
+  }
+
+  for (const item of moderate) {
+    if (selected.length >= 3) {
+      break;
+    }
+    selected.push(item);
+  }
+
+  for (const item of minor) {
+    if (selected.length >= 3) {
+      break;
+    }
+    selected.push(item);
+  }
+
+  return selected;
+}
 
 function speak(text: string, rate: number) {
   if (!("speechSynthesis" in window)) return;
@@ -17,23 +46,17 @@ function speak(text: string, rate: number) {
   window.speechSynthesis.speak(u);
 }
 
-function IssueCard({
-  issue,
-  practiceWord,
+function CoachingCard({
+  coaching,
   rank,
-  onSelectWord,
 }: {
-  issue: PriorityIssue;
-  practiceWord: PracticeWord | undefined;
+  coaching: WordCoaching;
   rank: number;
-  onSelectWord: (startMs: number) => void;
 }) {
   const [expanded, setExpanded] = useState(rank === 1);
-  const [reps, setReps] = useState(0);
-  const targetReps = practiceWord?.repetitions ?? 5;
 
   return (
-    <article className={`issue-card priority-${issue.priority}`}>
+    <article className={`issue-card priority-${coaching.severity}`}>
       <button
         className="issue-card-header"
         type="button"
@@ -43,40 +66,49 @@ function IssueCard({
         <div className="issue-card-title">
           <span className="issue-rank">{rank}</span>
           <div>
-            <strong className="issue-word">{issue.word}</strong>
-            {issue.ipa ? <span className="issue-ipa">{issue.ipa}</span> : null}
+            <strong className="issue-word">{coaching.word}</strong>
+            {coaching.native_audio_hint ? (
+              <span className="issue-ipa">{coaching.native_audio_hint}</span>
+            ) : null}
           </div>
         </div>
         <div className="issue-card-right">
-          <span className={`issue-score score-${issue.difficulty}`}>{Math.round(issue.score)}</span>
+          <span className={`issue-score score-${coaching.severity}`}>
+            {Math.round(coaching.score)}
+          </span>
           <span className="issue-chevron">{expanded ? "▲" : "▼"}</span>
         </div>
       </button>
 
       {expanded ? (
         <div className="issue-body">
-          <p className="issue-problem">{issue.why}</p>
-          {issue.practice_tip ? <p className="issue-tip">{issue.practice_tip}</p> : null}
+          <p className="issue-problem">{coaching.what_happened}</p>
+          <p className="issue-tip">{coaching.why}</p>
 
-          {issue.syllables.length > 0 ? (
-            <div className="issue-syllables">
-              {issue.syllables.map((syl, i) => (
-                <span key={i} className={`syl-chip ${issue.stress_syllable === i + 1 ? "stressed" : ""}`}>
-                  {syl}
-                </span>
-              ))}
+          {coaching.how_to_fix ? (
+            <div className="issue-drill">
+              <span className="small-label">How to fix it</span>
+              <p>{coaching.how_to_fix}</p>
             </div>
           ) : null}
 
-          {practiceWord?.drill ? (
+          {coaching.practice_drills.length > 0 ? (
             <div className="issue-drill">
-              <span className="small-label">Practice</span>
-              <p>{practiceWord.drill}</p>
-            </div>
-          ) : issue.drill ? (
-            <div className="issue-drill">
-              <span className="small-label">Practice</span>
-              <p>{issue.drill}</p>
+              <span className="small-label">Practice progression</span>
+              <ol className="drill-list">
+                {coaching.practice_drills.map((drill, i) => (
+                  <li key={i}>
+                    <span>{drill}</span>
+                    <button
+                      className="ghost-button drill-hear"
+                      type="button"
+                      onClick={() => speak(drill, 0.85)}
+                    >
+                      Hear
+                    </button>
+                  </li>
+                ))}
+              </ol>
             </div>
           ) : null}
 
@@ -84,39 +116,16 @@ function IssueCard({
             <button
               className="ghost-button"
               type="button"
-              onClick={() => speak(issue.native_pronunciation ?? issue.word, 0.92)}
+              onClick={() => speak(coaching.word, 0.92)}
             >
-              Hear native
+              ▶ Native
             </button>
             <button
               className="ghost-button"
               type="button"
-              onClick={() => speak(issue.slow_pronunciation ?? issue.word, 0.55)}
+              onClick={() => speak(coaching.word, 0.45)}
             >
-              Hear slow
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() => onSelectWord(issue.start_ms)}
-            >
-              In transcript
-            </button>
-          </div>
-
-          <div className="rep-section">
-            <div className="rep-track" aria-label={`${reps} of ${targetReps} repetitions`}>
-              {Array.from({ length: targetReps }).map((_, i) => (
-                <span key={i} className={`rep-dot ${i < reps ? "filled" : ""}`} />
-              ))}
-            </div>
-            <button
-              className="secondary-button rep-button"
-              type="button"
-              onClick={() => setReps((v) => Math.min(targetReps, v + 1))}
-              disabled={reps >= targetReps}
-            >
-              {reps >= targetReps ? "Done ✓" : "I said it"}
+              ▶ Slow
             </button>
           </div>
         </div>
@@ -125,8 +134,10 @@ function IssueCard({
   );
 }
 
-export function TopIssuesSection({ issues, practicePlan, onSelectWord }: TopIssuesSectionProps) {
-  const practiceWordMap = new Map(practicePlan.words.map((w) => [w.word.toLowerCase(), w]));
+export function TopIssuesSection({ wordCoaching }: TopIssuesSectionProps) {
+  const visibleItems = selectTopPriorityWords(wordCoaching);
+
+  if (!visibleItems.length) return null;
 
   return (
     <section className="issues-card">
@@ -134,21 +145,18 @@ export function TopIssuesSection({ issues, practicePlan, onSelectWord }: TopIssu
         <div>
           <span className="small-label">Top priorities</span>
           <h3>Fix these first</h3>
-          <p>Each card shows the problem, a practice tip, and repetition tracking.</p>
+          <p>Showing up to three highest-impact words, prioritized by severity and lowest score.</p>
         </div>
       </div>
       <div className="issue-list">
-        {issues.map((issue, index) => (
-          <IssueCard
-            key={`${issue.word}-${issue.start_ms}`}
-            issue={issue}
-            practiceWord={practiceWordMap.get(issue.word.toLowerCase())}
+        {visibleItems.map((coaching, index) => (
+          <CoachingCard
+            key={`${coaching.word}-${coaching.start_ms}`}
+            coaching={coaching}
             rank={index + 1}
-            onSelectWord={onSelectWord}
           />
         ))}
       </div>
     </section>
   );
 }
-

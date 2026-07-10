@@ -1,182 +1,225 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
-import type { WordFeedback } from "../types/assessment";
+import type { WordCoaching } from "../types/assessment";
 
-type FilterValue = "all" | "needs-practice" | "good" | "excellent";
+type FilterValue = "all" | "severe" | "moderate" | "minor";
 
 type TranscriptViewerProps = {
-  words: WordFeedback[];
+  transcript: string;
+  wordCoaching: WordCoaching[];
   selectedStartMs: number | null;
-  onSelectWord: (word: WordFeedback) => void;
+  onSelectWord: (word: WordCoaching) => void;
 };
 
 const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "needs-practice", label: "Needs Practice" },
-  { value: "good", label: "Good" },
-  { value: "excellent", label: "Excellent" },
+  { value: "all", label: "All flagged" },
+  { value: "severe", label: "Severe" },
+  { value: "moderate", label: "Moderate" },
+  { value: "minor", label: "Minor" },
 ];
 
-export function TranscriptViewer({ words, selectedStartMs, onSelectWord }: TranscriptViewerProps) {
+function speak(text: string, rate: number) {
+  if (!("speechSynthesis" in window)) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = rate;
+  utterance.lang = "en-US";
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
+export function TranscriptViewer({
+  transcript,
+  wordCoaching,
+  selectedStartMs,
+  onSelectWord,
+}: TranscriptViewerProps) {
   const [filter, setFilter] = useState<FilterValue>("all");
   const [search, setSearch] = useState("");
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const deferredSearch = useDeferredValue(search);
 
-  const filteredWords = useMemo(() => {
-    return words.filter((word) => {
-      const matchesFilter =
-        filter === "all"
-          ? true
-          : filter === "needs-practice"
-            ? word.status === "watch" || word.status === "needs-practice"
-            : word.status === filter;
+  // Build a lookup from word (lowercase) → coaching item for transcript highlighting
+  const coachingByWord = useMemo(() => {
+    const map = new Map<string, WordCoaching>();
+    for (const wc of wordCoaching) {
+      // Keep the worst-scoring instance if same word appears twice (shouldn't after dedup, but safe)
+      const existing = map.get(wc.word.toLowerCase());
+      if (!existing || wc.score < existing.score) {
+        map.set(wc.word.toLowerCase(), wc);
+      }
+    }
+    return map;
+  }, [wordCoaching]);
 
+  const filteredCoaching = useMemo(() => {
+    return wordCoaching.filter((wc) => {
+      const matchesFilter = filter === "all" ? true : wc.severity === filter;
       const matchesSearch = deferredSearch.trim()
-        ? word.word.toLowerCase().includes(deferredSearch.trim().toLowerCase())
+        ? wc.word.toLowerCase().includes(deferredSearch.trim().toLowerCase())
         : true;
-
       return matchesFilter && matchesSearch;
     });
-  }, [deferredSearch, filter, words]);
+  }, [deferredSearch, filter, wordCoaching]);
 
-  const selectedWord = filteredWords.find((word) => word.start_ms === selectedStartMs) ?? words.find((word) => word.start_ms === selectedStartMs) ?? null;
+  const selectedWord =
+    filteredCoaching.find((wc) => wc.start_ms === selectedStartMs) ??
+    wordCoaching.find((wc) => wc.start_ms === selectedStartMs) ??
+    null;
 
-  function explanationForWord(word: WordFeedback) {
-    if (word.pronunciation_explanation) {
-      return word.pronunciation_explanation;
-    }
-    if (word.evidence_summary) {
-      return word.evidence_summary;
-    }
-    if (word.issue) {
-      return word.issue;
-    }
-    if (word.affected_syllable && word.affected_phonemes?.length) {
-      return `The ${word.affected_syllable} part of ${word.word} was less stable, especially around ${word.affected_phonemes.slice(0, 2).join(" and ")}.`;
-    }
-    return `This word was understandable, but it did not sound as clear or consistent as your stronger words.`;
-  }
-
-  function suggestionForWord(word: WordFeedback) {
-    if (word.suggestion) {
-      return word.suggestion;
-    }
-    if (word.affected_syllable) {
-      return `Practice the ${word.affected_syllable} part of ${word.word} slowly, then say the full word again in a short phrase.`;
-    }
-    if (word.affected_phonemes?.length) {
-      return `Repeat ${word.word} while emphasizing ${word.affected_phonemes.slice(0, 2).join(" and ")}, then place it back into a sentence.`;
-    }
-    return `Try ${word.word} once slowly, once naturally, and once in a sentence so the sound stays consistent.`;
-  }
-
-  function speak(text: string, rate: number) {
-    if (!("speechSynthesis" in window)) {
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = rate;
-    utterance.lang = "en-US";
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }
+  // Render transcript as tokens, highlighting coached words
+  const transcriptTokens = useMemo(() => {
+    if (!transcript) return [];
+    return transcript.split(/(\s+)/).map((token, i) => {
+      const clean = token.replace(/[.,!?;:'"]/g, "").toLowerCase();
+      const coaching = coachingByWord.get(clean);
+      return { token, coaching, key: i };
+    });
+  }, [transcript, coachingByWord]);
 
   return (
     <section className="transcript-card">
       <div className="section-header">
         <div>
           <span className="small-label">Interactive transcript</span>
-          <h3>Tap any word to understand what needs work</h3>
+          <h3>Click any highlighted word to see its coaching</h3>
+          <p className="transcript-click-hint">
+            Highlighted words are clickable. Filled highlights are higher priority; outlined words are lower priority.
+          </p>
         </div>
       </div>
 
-      <div className="transcript-toolbar">
-        <div className="filter-row" role="tablist" aria-label="Transcript filters">
-          {FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              className={`filter-chip ${filter === option.value ? "active" : ""}`}
-              type="button"
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
+      {/* Full transcript with inline highlights */}
+      {transcript ? (
+        <div className="transcript-flow transcript-prose">
+          {transcriptTokens.map(({ token, coaching, key }) => {
+            if (!coaching || /^\s+$/.test(token)) {
+              return <span key={key}>{token}</span>;
+            }
+            const isSelected = selectedStartMs === coaching.start_ms;
+            return (
+              <button
+                key={key}
+                className={`word-pill ${coaching.severity} ${isSelected ? "selected" : ""}`}
+                type="button"
+                onClick={() => onSelectWord(coaching)}
+              >
+                {token}
+              </button>
+            );
+          })}
         </div>
-        <input
-          className="transcript-search"
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search a word"
-          aria-label="Search transcript"
-        />
-      </div>
+      ) : null}
 
-      <div className="transcript-flow">
-        {filteredWords.map((word) => (
-          <button
-            key={`${word.word}-${word.start_ms}`}
-            className={`word-pill ${word.status} ${selectedStartMs === word.start_ms ? "selected" : ""}`}
-            type="button"
-            onClick={() => onSelectWord(word)}
-          >
-            {word.word}
-          </button>
-        ))}
-      </div>
+      {/* Toolbar for filtered word list */}
+      {wordCoaching.length > 0 ? (
+        <>
+          <div className="transcript-toolbar">
+            <div className="filter-row" role="tablist" aria-label="Severity filters">
+              {FILTER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={`filter-chip ${filter === option.value ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setFilter(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <input
+              className="transcript-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search a word"
+              aria-label="Search coached words"
+            />
+          </div>
 
+          <div className="word-analysis-grid">
+            {filteredCoaching.map((wc) => (
+              <article
+                key={`${wc.word}-${wc.start_ms}`}
+                className={`analysis-card ${wc.severity} ${selectedStartMs === wc.start_ms ? "selected" : ""}`}
+                onClick={() => onSelectWord(wc)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && onSelectWord(wc)}
+              >
+                <div className="analysis-topline">
+                  <strong>{wc.word}</strong>
+                  <span>{Math.round(wc.score)}/100</span>
+                </div>
+                <p>{wc.what_happened}</p>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* Selected word detail drawer */}
       {selectedWord ? (
-        <article className={`word-drawer ${selectedWord.status}`}>
+        <article className={`word-drawer ${selectedWord.severity}`}>
           <div className="word-drawer-header">
             <div>
               <span className="small-label">Word detail</span>
               <h4>{selectedWord.word}</h4>
+              {selectedWord.native_audio_hint ? (
+                <span className="issue-ipa">{selectedWord.native_audio_hint}</span>
+              ) : null}
             </div>
             <strong>{Math.round(selectedWord.score)}/100</strong>
           </div>
+
           <div className="word-detail-grid">
-            <p><strong>Detected weakness:</strong> {explanationForWord(selectedWord)}</p>
-            <p><strong>Practice suggestion:</strong> {suggestionForWord(selectedWord)}</p>
-            {selectedWord.ipa ? <p><strong>Expected pronunciation:</strong> {selectedWord.ipa}</p> : null}
-            {selectedWord.syllables.length ? <p><strong>Syllables:</strong> {selectedWord.syllables.join(" • ")}</p> : null}
-            {selectedWord.stress_syllable ? <p><strong>Stress:</strong> syllable {selectedWord.stress_syllable}</p> : null}
-            {selectedWord.phoneme_hint ? <p><strong>Sounds to watch:</strong> {selectedWord.phoneme_hint}</p> : null}
+            <p>
+              <strong>What happened:</strong> {selectedWord.what_happened}
+            </p>
+            <p>
+              <strong>Why it matters:</strong> {selectedWord.why}
+            </p>
+            <p>
+              <strong>How to fix it:</strong> {selectedWord.how_to_fix}
+            </p>
           </div>
+
+          {selectedWord.practice_drills.length > 0 ? (
+            <div className="issue-drill">
+              <span className="small-label">Practice progression</span>
+              <ol className="drill-list">
+                {selectedWord.practice_drills.map((drill, i) => (
+                  <li key={i}>
+                    <span>{drill}</span>
+                    <button
+                      className="ghost-button drill-hear"
+                      type="button"
+                      onClick={() => speak(drill, 0.85)}
+                    >
+                      Hear
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+
           <div className="button-row">
-            <button className="ghost-button" type="button" onClick={() => speak(selectedWord.native_pronunciation ?? selectedWord.word, 0.92)}>
-              Native pronunciation
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => speak(selectedWord.word, 0.92)}
+            >
+              ▶ Native
             </button>
-            <button className="ghost-button" type="button" onClick={() => speak(selectedWord.slow_pronunciation ?? selectedWord.word, 0.62)}>
-              Slow pronunciation
-            </button>
-            <button className="secondary-button" type="button" onClick={() => onSelectWord(selectedWord)}>
-              Retry this word
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => speak(selectedWord.word, 0.45)}
+            >
+              ▶ Slow
             </button>
           </div>
         </article>
       ) : null}
-
-      <div className="collapse-block">
-        <button className="ghost-button" type="button" onClick={() => setDetailsExpanded((value) => !value)}>
-          {detailsExpanded ? "Hide detailed analytics" : "Show detailed analytics"}
-        </button>
-        {detailsExpanded ? (
-          <div className="word-analysis-grid">
-            {filteredWords.map((word) => (
-              <article key={`${word.word}-${word.start_ms}-detail`} className={`analysis-card ${word.status}`}>
-                <div className="analysis-topline">
-                  <strong>{word.word}</strong>
-                  <span>{Math.round(word.score)}</span>
-                </div>
-                <p>{explanationForWord(word)}</p>
-                <small>{suggestionForWord(word)}</small>
-              </article>
-            ))}
-          </div>
-        ) : null}
-      </div>
     </section>
   );
 }

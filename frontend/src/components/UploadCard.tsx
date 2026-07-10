@@ -48,9 +48,12 @@ export function UploadCard({
                 onFileChange(file, "upload");
               }}
             />
+            <div className="upload-dropzone-icon" aria-hidden="true">
+              <span className="upload-dropzone-arrow">↑</span>
+            </div>
             <span className="small-label">Upload audio</span>
             <strong>Select a recording</strong>
-            <p>Choose a natural English sample. You do not need a script.</p>
+            <p>Drag and drop an audio file here, or click to browse. You do not need a script.</p>
           </label>
 
           <Recorder
@@ -62,7 +65,9 @@ export function UploadCard({
 
         <label className="consent-row">
           <input type="checkbox" checked={consentAccepted} onChange={(event) => onConsentChange(event.target.checked)} />
-          <span>I consent to audio processing for pronunciation coaching. Raw audio is removed after analysis.</span>
+          <span>
+            I consent to my recording and transcript being processed for pronunciation coaching, as described in the <a href="/privacy">Privacy Notice</a>. Raw audio is removed after analysis; results are kept for up to 90 days or until I delete them.
+          </span>
         </label>
 
         <div className="submit-row">

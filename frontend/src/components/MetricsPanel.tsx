@@ -1,7 +1,7 @@
-import type { MetricInsight } from "../types/assessment";
+import type { ScoreMetric } from "../types/assessment";
 
 type MetricsPanelProps = {
-  metrics: MetricInsight[];
+  metrics: ScoreMetric[];
 };
 
 export function MetricsPanel({ metrics }: MetricsPanelProps) {
@@ -9,8 +9,8 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
     <section className="metrics-card">
       <div className="section-header">
         <div>
-          <span className="small-label">Detailed analytics</span>
-          <h3>Compact score breakdown</h3>
+          <span className="small-label">Score breakdown</span>
+          <h3>Detailed analytics</h3>
         </div>
       </div>
       <div className="metrics-list">
@@ -20,7 +20,10 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
               <strong>{metric.label}</strong>
               <p>{metric.explanation}</p>
             </div>
-            <span>{Math.round(metric.score)}</span>
+            <div className="metric-right">
+              <span className="metric-score">{Math.round(metric.score)}</span>
+              <span className="metric-band">{metric.band}</span>
+            </div>
           </article>
         ))}
       </div>

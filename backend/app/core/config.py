@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     max_audio_mb: int = 20
     min_audio_seconds: int = 30
     max_audio_seconds: int = 45
+    attempt_retention_days: int = 90
+    retention_purge_hour_utc: int = 3
     enable_mock_analysis: bool = True
 
     azure_speech_key: str | None = None

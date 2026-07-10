@@ -114,7 +114,8 @@ export function Recorder({ onReady }: RecorderProps) {
     setIsRecording(false);
   }
 
-  const isValidWindow = seconds >= MIN_SECONDS && seconds <= MAX_SECONDS;
+      const isValidWindow = seconds >= MIN_SECONDS && seconds <= MAX_SECONDS;
+  const maxReached = seconds >= MAX_SECONDS;
   const progressPct = Math.min(100, (seconds / MAX_SECONDS) * 100);
 
   return (
@@ -136,14 +137,14 @@ export function Recorder({ onReady }: RecorderProps) {
         <span className={`rec-time ${isValidWindow ? "valid" : ""}`}>{seconds}s / {MAX_SECONDS}s</span>
       </div>
 
-      <p className={`rec-hint ${isValidWindow ? "valid" : ""}`}>
-        {isValidWindow
+      <p className={`rec-hint ${isValidWindow ? "valid" : ""} ${maxReached ? "max-reached" : ""}`}>
+        {maxReached
+          ? "✓ Max duration reached — click Analyze pronunciation below"
+          : isValidWindow
           ? "✓ Ready — recording is in the 30–45 second window"
           : seconds === 0
           ? `Speak for at least ${MIN_SECONDS} seconds to enable analysis`
-          : seconds < MIN_SECONDS
-          ? `${MIN_SECONDS - seconds}s more needed`
-          : "Maximum length reached"}
+          : `${MIN_SECONDS - seconds}s more needed`}
       </p>
 
       <div className="button-row">

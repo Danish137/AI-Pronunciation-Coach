@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const PROCESS_STEPS = [
   { label: "Uploading audio...", pct: 8 },
-  { label: "Sending to Azure Speech...", pct: 22 },
+  { label: "Checking pronunciation details...", pct: 22 },
   { label: "Analyzing pronunciation...", pct: 48 },
   { label: "Generating AI coaching...", pct: 72 },
   { label: "Building your practice plan...", pct: 90 },

@@ -46,7 +46,13 @@ async def create_assessment(
         prepared_audio.cleanup()
 
     repo = AttemptRepository(db)
-    history_item = repo.create(assessment, session_id=session_id, source_type=source_type, reference_text=reference_text)
+    history_item = repo.create(
+        assessment,
+        session_id=session_id,
+        source_type=source_type,
+        reference_text=reference_text,
+        consent_accepted=consent_accepted,
+    )
     logger.warning("API_RESPONSE_JSON %s", history_item.model_dump_json())
     return history_item
 

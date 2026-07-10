@@ -1,26 +1,34 @@
-import type { CoachInsight } from "../types/assessment";
+import type { PatternInsight } from "../types/assessment";
 
 type InsightsPanelProps = {
-  insights: CoachInsight[];
+  patterns: PatternInsight[];
 };
 
-export function InsightsPanel({ insights }: InsightsPanelProps) {
+export function InsightsPanel({ patterns }: InsightsPanelProps) {
+  if (!patterns.length) return null;
+
   return (
     <section className="insights-card">
       <div className="section-header">
         <div>
           <span className="small-label">Speaking patterns</span>
-          <h3>Useful habits to notice</h3>
+          <h3>Recurring habits to address</h3>
         </div>
       </div>
       <div className="insights-list">
-        {insights.map((insight) => (
-          <article key={insight.title} className="insight-row">
+        {patterns.map((pattern) => (
+          <article key={pattern.label} className="insight-row">
             <div>
-              <strong>{insight.title}</strong>
-              <p>{insight.description}</p>
+              <strong>{pattern.label}</strong>
+              <p>{pattern.explanation}</p>
+              {pattern.affected_words.length > 0 ? (
+                <div className="pattern-words">
+                  {pattern.affected_words.map((w) => (
+                    <span key={w} className="word-tag">{w}</span>
+                  ))}
+                </div>
+              ) : null}
             </div>
-            <span>{insight.value}</span>
           </article>
         ))}
       </div>

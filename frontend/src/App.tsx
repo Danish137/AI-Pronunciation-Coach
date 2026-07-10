@@ -2,19 +2,17 @@ import { startTransition, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 
-import { CoachSummaryPanel } from "./components/CoachSummaryPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
-import { PracticePanel } from "./components/PracticePanel";
 import { ProgressPipeline } from "./components/ProgressPipeline";
 import { ResultHeader } from "./components/ResultHeader";
-import { TopIssuesSection } from "./components/TopIssuesSection";
+import { TopIssuesSection, selectTopPriorityWords } from "./components/TopIssuesSection";
 import { TranscriptViewer } from "./components/TranscriptViewer";
 import { UploadCard } from "./components/UploadCard";
 import { useAssessmentHistory, useDeleteAttempt, useDeleteHistory } from "./hooks/useAssessmentHistory";
 import { useProcessingPipeline } from "./hooks/useProcessingPipeline";
 import { createAssessment } from "./lib/api";
 import { validateAudioDuration } from "./lib/audio";
-import type { Assessment, SourceType, WordFeedback } from "./types/assessment";
+import type { Assessment, SourceType, WordCoaching } from "./types/assessment";
 
 const ACCEPTED_AUDIO_TYPES = ".wav,.mp3,.m4a,.webm,audio/wav,audio/mpeg,audio/mp4,audio/webm";
 
@@ -34,10 +32,9 @@ function App() {
   const assessmentMutation = useMutation({
     mutationFn: createAssessment,
     onSuccess: (attempt) => {
-      console.debug("Assessment mutation success", attempt);
       startTransition(() => {
         setActiveAttempt(attempt);
-        setSelectedWordStartMs(attempt.top_issues[0]?.start_ms ?? attempt.word_feedback[0]?.start_ms ?? null);
+        setSelectedWordStartMs(selectTopPriorityWords(attempt.word_coaching)[0]?.start_ms ?? null);
       });
       setError("");
       historyQuery.refetch();
@@ -54,41 +51,42 @@ function App() {
 
   const pipeline = useProcessingPipeline(assessmentMutation.isPending);
   const currentAttempt = activeAttempt ?? historyQuery.data?.[0] ?? null;
-  console.debug("Current attempt for render", currentAttempt);
+  const topPriorityWords = useMemo(
+    () => (currentAttempt ? selectTopPriorityWords(currentAttempt.word_coaching) : []),
+    [currentAttempt],
+  );
 
   const selectedFileLabel = useMemo(() => {
-    if (!selectedFile || selectedDuration === null) {
-      return null;
-    }
+    if (!selectedFile || selectedDuration === null) return null;
     return `${selectedFile.name} • ${sourceType} • ${selectedDuration.toFixed(1)}s`;
   }, [selectedDuration, selectedFile, sourceType]);
 
-  const canSubmit = Boolean(selectedFile && selectedDuration !== null && consentAccepted && !assessmentMutation.isPending);
+  const canSubmit = Boolean(
+    selectedFile && selectedDuration !== null && consentAccepted && !assessmentMutation.isPending,
+  );
 
   const improvementDelta = useMemo(() => {
-    if (!currentAttempt || !historyQuery.data?.length) {
-      return null;
-    }
-    const currentIndex = historyQuery.data.findIndex((attempt) => attempt.id === currentAttempt.id);
-    const previousAttempt = currentIndex >= 0 ? historyQuery.data[currentIndex + 1] : historyQuery.data[1];
-    if (!previousAttempt) {
-      return null;
-    }
-    return Math.round(currentAttempt.overall_score - previousAttempt.overall_score);
+    if (!currentAttempt || !historyQuery.data?.length) return null;
+    const currentIndex = historyQuery.data.findIndex((a) => a.id === currentAttempt.id);
+    const previous =
+      currentIndex >= 0 ? historyQuery.data[currentIndex + 1] : historyQuery.data[1];
+    if (!previous) return null;
+    // Round each score first, then diff — avoids e.g. 94.4 - 90.4 = 4.0 showing as 3
+    return Math.round(currentAttempt.overall_score) - Math.round(previous.overall_score);
   }, [currentAttempt, historyQuery.data]);
 
-  async function handleFileChange(file: File | null, nextSourceType: SourceType, knownDuration?: number) {
+  async function handleFileChange(
+    file: File | null,
+    nextSourceType: SourceType,
+    knownDuration?: number,
+  ) {
     setError("");
     setSourceType(nextSourceType);
     setSelectedFile(file);
     setSelectedDuration(null);
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
-    // Recordings already validated inside Recorder.tsx — trust the elapsed seconds directly
-    // because webm blobs from MediaRecorder have Infinity duration metadata.
     if (knownDuration !== undefined) {
       setSelectedDuration(knownDuration);
       return;
@@ -113,7 +111,6 @@ function App() {
       setError("Please accept consent before analyzing audio.");
       return;
     }
-
     await assessmentMutation.mutateAsync({
       file: selectedFile,
       sourceType,
@@ -122,7 +119,7 @@ function App() {
     });
   }
 
-  function handleSelectWord(word: WordFeedback) {
+  function handleSelectWord(word: WordCoaching) {
     startTransition(() => {
       setSelectedWordStartMs(word.start_ms);
     });
@@ -145,26 +142,35 @@ function App() {
           canSubmit={canSubmit}
         />
 
-        <ProgressPipeline steps={pipeline.steps} stepIndex={pipeline.stepIndex} progressPct={pipeline.progressPct} visible={assessmentMutation.isPending} />
+        <ProgressPipeline
+          steps={pipeline.steps}
+          stepIndex={pipeline.stepIndex}
+          progressPct={pipeline.progressPct}
+          visible={assessmentMutation.isPending}
+        />
 
         {currentAttempt ? (
           <div className="results-stack">
             <ResultHeader assessment={currentAttempt} improvementDelta={improvementDelta} />
+
             <TopIssuesSection
-              issues={currentAttempt.top_issues}
-              practicePlan={currentAttempt.practice_plan}
-              onSelectWord={(startMs) => setSelectedWordStartMs(startMs)}
+              wordCoaching={currentAttempt.word_coaching}
             />
-            <TranscriptViewer words={currentAttempt.word_feedback} selectedStartMs={selectedWordStartMs} onSelectWord={handleSelectWord} />
-            <CoachSummaryPanel summary={currentAttempt.coach_summary} />
-            <PracticePanel practicePlan={currentAttempt.practice_plan} />
+
+            <TranscriptViewer
+              transcript={currentAttempt.transcript}
+              wordCoaching={currentAttempt.word_coaching}
+              selectedStartMs={selectedWordStartMs ?? topPriorityWords[0]?.start_ms ?? null}
+              onSelectWord={handleSelectWord}
+            />
+
             <HistoryPanel
               attempts={historyQuery.data ?? []}
               activeAttemptId={currentAttempt.id}
               onSelect={(attempt) => {
                 startTransition(() => {
                   setActiveAttempt(attempt);
-                  setSelectedWordStartMs(attempt.top_issues[0]?.start_ms ?? attempt.word_feedback[0]?.start_ms ?? null);
+                  setSelectedWordStartMs(selectTopPriorityWords(attempt.word_coaching)[0]?.start_ms ?? null);
                 });
               }}
               onDelete={(id) => deleteAttemptMutation.mutate(id)}
@@ -176,7 +182,9 @@ function App() {
           <section className="empty-result-card">
             <div className="empty-illustration" aria-hidden="true" />
             <h2>Record your first pronunciation sample</h2>
-            <p>We will show your score, the five most important words to fix, a highlighted transcript, and a short practice plan.</p>
+            <p>
+              We will show your score, the most important words to fix, and a highlighted transcript.
+            </p>
           </section>
         )}
       </main>

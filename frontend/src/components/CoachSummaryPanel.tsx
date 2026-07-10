@@ -1,17 +1,10 @@
-import type { CoachSummary } from "../types/assessment";
+import type { RecordingSummary } from "../types/assessment";
 
 type CoachSummaryPanelProps = {
-  summary: CoachSummary;
+  summary: RecordingSummary;
 };
 
 export function CoachSummaryPanel({ summary }: CoachSummaryPanelProps) {
-  // Build a coherent paragraph from the available fields
-  const parts: string[] = [];
-  if (summary.summary) parts.push(summary.summary);
-  if (summary.advice && summary.advice !== summary.summary) parts.push(summary.advice);
-
-  const paragraph = parts.join(" ");
-
   return (
     <section className="coach-summary-card">
       <div className="summary-heading">
@@ -19,32 +12,41 @@ export function CoachSummaryPanel({ summary }: CoachSummaryPanelProps) {
         <h3>What your coach noticed</h3>
       </div>
 
-      {paragraph ? <p className="coach-paragraph">{paragraph}</p> : null}
+      {summary.overall_habit ? (
+        <p className="coach-paragraph">{summary.overall_habit}</p>
+      ) : null}
 
-      {summary.repeated_issue ? (
-        <div className="coach-pattern">
-          <span className="small-label">Repeated pattern</span>
-          <p>{summary.repeated_issue}</p>
+      {summary.patterns.length > 0 ? (
+        <div className="coach-patterns">
+          <span className="small-label">Recurring patterns</span>
+          {summary.patterns.map((pattern) => (
+            <div key={pattern.label} className="coach-pattern">
+              <strong>{pattern.label}</strong>
+              <p>{pattern.explanation}</p>
+              {pattern.affected_words.length > 0 ? (
+                <div className="pattern-words">
+                  {pattern.affected_words.map((w) => (
+                    <span key={w} className="word-tag">{w}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
       ) : null}
 
-      {summary.strengths.length > 0 || summary.weaknesses.length > 0 ? (
+      {summary.strengths.length > 0 ? (
         <div className="summary-columns">
-          {summary.strengths.length > 0 ? (
-            <div>
-              <strong>Strengths</strong>
-              <ul>{summary.strengths.map((s) => <li key={s}>{s}</li>)}</ul>
-            </div>
-          ) : null}
-          {summary.weaknesses.length > 0 ? (
-            <div>
-              <strong>To improve</strong>
-              <ul>{summary.weaknesses.map((s) => <li key={s}>{s}</li>)}</ul>
-            </div>
-          ) : null}
+          <div>
+            <strong>Strengths</strong>
+            <ul>
+              {summary.strengths.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : null}
     </section>
   );
 }
-

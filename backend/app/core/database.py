@@ -63,3 +63,7 @@ def create_tables() -> None:
             connection.execute(text("ALTER TABLE attempts ADD COLUMN result_payload_json TEXT DEFAULT ''"))
         if "raw_azure_json" not in columns:
             connection.execute(text("ALTER TABLE attempts ADD COLUMN raw_azure_json TEXT DEFAULT ''"))
+        if "consent_accepted" not in columns:
+            connection.execute(text("ALTER TABLE attempts ADD COLUMN consent_accepted BOOLEAN DEFAULT 0"))
+        if "consent_recorded_at" not in columns:
+            connection.execute(text("ALTER TABLE attempts ADD COLUMN consent_recorded_at DATETIME"))

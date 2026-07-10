@@ -1,96 +1,68 @@
 export type SourceType = "upload" | "recording";
-export type WordStatus = "excellent" | "good" | "watch" | "needs-practice";
 
-export type WordFeedback = {
+// ---------------------------------------------------------------------------
+// Word-level coaching (only words scoring < 90)
+// ---------------------------------------------------------------------------
+
+export type WordCoaching = {
   word: string;
   score: number;
-  status: WordStatus;
-  issue: string;
-  suggestion: string;
+  severity: "minor" | "moderate" | "severe";
+  what_happened: string;
+  why: string;
+  how_to_fix: string;
+  practice_drills: string[];
+  native_audio_hint: string | null;
   start_ms: number;
   end_ms: number;
-  duration_ms: number;
-  error_type: string;
-  confidence: "high" | "medium" | "low";
-  phoneme_hint: string | null;
-  practice_priority: "high" | "medium" | "low";
-  ipa: string | null;
-  syllables: string[];
-  stress_syllable: number | null;
-  native_pronunciation: string | null;
-  slow_pronunciation: string | null;
-  affected_phonemes?: string[];
-  affected_syllable?: string | null;
-  pronunciation_explanation?: string | null;
-  detected_issue_categories?: string[];
-  evidence_summary?: string | null;
 };
 
-export type CoachOverview = {
+// ---------------------------------------------------------------------------
+// Pattern-level insight (cross-word speaking habits)
+// ---------------------------------------------------------------------------
+
+export type PatternInsight = {
+  label: string;
+  affected_words: string[];
+  explanation: string;
+  priority: number;
+};
+
+// ---------------------------------------------------------------------------
+// Recording-level summary
+// ---------------------------------------------------------------------------
+
+export type RecordingSummary = {
   headline: string;
   level_label: string;
-  why: string;
-  cefr_estimate: string;
-  confidence_label: string;
-  improvement_potential: string;
-  celebration: string;
-};
-
-export type CoachSummary = {
-  summary: string;
+  overall_habit: string;
   strengths: string[];
-  weaknesses: string[];
-  speaking_habits: string[];
-  repeated_issue: string;
-  advice: string;
+  patterns: PatternInsight[];
+  primary_action: string;
+  gain_estimate: string;
 };
 
-export type PriorityIssue = {
-  word: string;
-  score: number;
-  why: string;
-  likely_issue: string;
-  practice_tip: string;
-  drill: string;
-  difficulty: "easy" | "medium" | "hard";
-  priority: "high" | "medium" | "low";
-  confidence: "high" | "medium" | "low";
-  start_ms: number;
-  end_ms: number;
-  ipa: string | null;
-  syllables: string[];
-  stress_syllable: number | null;
-  native_pronunciation: string | null;
-  slow_pronunciation: string | null;
+// ---------------------------------------------------------------------------
+// Practice session
+// ---------------------------------------------------------------------------
+
+export type PracticeDrill = {
+  theme: string;
+  words: string[];
+  progression: string[];
 };
 
-export type PracticeWord = {
-  word: string;
-  reason: string;
-  drill: string;
-  syllable_hint: string;
-  ipa: string | null;
-  stress_syllable: number | null;
-  native_pronunciation: string | null;
-  slow_pronunciation: string | null;
-  repetitions: number;
-  estimated_gain: number;
+export type PracticeSession = {
+  focus: string;
+  drills: PracticeDrill[];
+  context_sentences: string[];
 };
 
-export type PracticeSentence = {
-  sentence: string;
-  focus_words: string[];
-};
+// ---------------------------------------------------------------------------
+// Score metrics
+// ---------------------------------------------------------------------------
 
-export type PracticePlan = {
-  today_focus: string;
-  estimated_score_if_fixed: number;
-  estimated_gain: number;
-  words: PracticeWord[];
-  sentences: PracticeSentence[];
-};
-
-export type MetricInsight = {
+export type ScoreMetric = {
   key: "overall" | "accuracy" | "prosody" | "fluency" | "completeness";
   label: string;
   score: number;
@@ -98,11 +70,9 @@ export type MetricInsight = {
   explanation: string;
 };
 
-export type CoachInsight = {
-  title: string;
-  value: string;
-  description: string;
-};
+// ---------------------------------------------------------------------------
+// Main assessment shape
+// ---------------------------------------------------------------------------
 
 export type Assessment = {
   id: number;
@@ -115,16 +85,11 @@ export type Assessment = {
   prosody_score: number;
   completeness_score: number;
   duration_seconds: number;
-  summary: string;
-  coaching: string;
   provider_mode: "mock" | "azure";
-  word_feedback: WordFeedback[];
-  top_issues: PriorityIssue[];
-  overview: CoachOverview;
-  coach_summary: CoachSummary;
-  practice_plan: PracticePlan;
-  metrics: MetricInsight[];
-  insights: CoachInsight[];
+  summary: RecordingSummary;
+  metrics: ScoreMetric[];
+  word_coaching: WordCoaching[];
+  practice: PracticeSession;
   created_at: string;
 };
 
